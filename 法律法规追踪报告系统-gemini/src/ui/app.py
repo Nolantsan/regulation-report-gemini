@@ -119,14 +119,85 @@ class LegalTrackerApp(ctk.CTk):
             self.after(0, self._set_ui_idle)
 
     async def run_web_search_async(self) -> list:
-        # ... implementation is correct ...
-        return []
+        """Execute web searches when enabled and return regulation list."""
+        if not self.web_search_switch.get():
+            self.log_to_ui("网络搜索未启用，跳过。", "WARNING")
+            return []
+
+        self.log_to_ui("启动网络搜索...", "INFO")
+        # 初始进度反馈
+        self.after(0, self.progress_bar.set, 0.1)
+
+        results = []
+        try:
+            async with AsyncLegalScraper() as scraper:
+                results = await scraper.fetch_all_sources()
+            self.log_to_ui(f"网络搜索完成，获取到 {len(results)} 条法规。", "SUCCESS")
+        except Exception as e:
+            logger.error(f"网络搜索失败: {e}", exc_info=True)
+            self.log_to_ui(f"网络搜索失败: {e}", "ERROR")
+
+        # 更新进度条
+        self.after(0, self.progress_bar.set, 0.3)
+        return results
 
     async def run_scan_async(self):
-        # ... implementation is correct ...
-        with next(get_db()) as db_session:
-            # ... database logic ...
-            pass
+        """Coordinate scraping, AI analysis and DB persistence."""
+        self.after(0, self.progress_bar.grid, {"row": 0, "column": 1, "sticky": "ew", "padx": 10})
+        self.after(0, self.progress_bar.set, 0)
+        self.log_to_ui("开始扫描法规数据源...", "INFO")
+
+        try:
+            regulations = await self.run_web_search_async()
+
+            if not regulations:
+                self.log_to_ui("未获取到任何法规。", "WARNING")
+                return
+
+            self.after(0, self.progress_bar.set, 0.4)
+            analyzed = await ai_service.batch_analyze(regulations)
+            self.log_to_ui(f"AI分析完成，共 {len(analyzed)} 条法规相关。", "INFO")
+
+            self.after(0, self.progress_bar.set, 0.7)
+            with next(get_db()) as db_session:
+                for reg in analyzed:
+                    # 解析发布日期
+                    publish_date = None
+                    if reg.get('publish_date'):
+                        try:
+                            publish_date = datetime.strptime(str(reg['publish_date']).strip('[]'), "%Y-%m-%d").date()
+                        except Exception:
+                            publish_date = None
+
+                    existing = db_session.query(Regulation).filter_by(url=reg['url']).first()
+                    if existing:
+                        existing.title = reg.get('title', existing.title)
+                        existing.publish_date = publish_date or existing.publish_date
+                        existing.source = reg.get('source', existing.source)
+                        existing.category = reg.get('category', existing.category)
+                        existing.full_text = reg.get('full_text', existing.full_text)
+                        existing.keywords = reg.get('keywords', existing.keywords)
+                        existing.ai_analysis = reg.get('ai_analysis', existing.ai_analysis)
+                    else:
+                        db_session.add(Regulation(
+                            title=reg.get('title'),
+                            url=reg.get('url'),
+                            publish_date=publish_date,
+                            source=reg.get('source'),
+                            category=reg.get('category'),
+                            full_text=reg.get('full_text'),
+                            keywords=reg.get('keywords'),
+                            ai_analysis=reg.get('ai_analysis')
+                        ))
+                db_session.commit()
+
+            self.after(0, self.progress_bar.set, 1)
+            self.log_to_ui("扫描流程完成，数据已保存。", "SUCCESS")
+        except Exception as e:
+            logger.error(f"扫描流程失败: {e}", exc_info=True)
+            self.log_to_ui(f"扫描流程失败: {e}", "ERROR")
+        finally:
+            self.after(0, self.progress_bar.grid_forget)
 
     def start_report_generation_thread(self):
         self.log_to_ui("请求生成合规报告...", "INFO")
@@ -148,10 +219,47 @@ class LegalTrackerApp(ctk.CTk):
             self.after(0, self._set_ui_idle)
 
     async def run_report_generation_async(self):
-        # ... implementation is correct ...
-        with next(get_db()) as db_session:
-            # ... database logic ...
-            pass
+        """Generate executive report from analyzed regulations."""
+        self.log_to_ui("开始生成合规报告...", "INFO")
+        self.after(0, self.progress_bar.set, 0.1)
+
+        try:
+            with next(get_db()) as db_session:
+                regs = (
+                    db_session.query(Regulation)
+                    .filter(Regulation.ai_analysis.isnot(None))
+                    .order_by(desc(Regulation.publish_date))
+                    .all()
+                )
+
+            self.after(0, self.progress_bar.set, 0.4)
+            reg_dicts = []
+            for r in regs:
+                reg_dicts.append({
+                    'title': r.title,
+                    'url': r.url,
+                    'publish_date': r.publish_date.isoformat() if r.publish_date else None,
+                    'source': r.source,
+                    'category': r.category,
+                    'full_text': r.full_text,
+                    'keywords': r.keywords,
+                    'ai_analysis': r.ai_analysis,
+                })
+
+            report_content = await ai_service.generate_executive_report(reg_dicts)
+
+            report_dir = Path(__file__).resolve().parent.parent.parent / "reports"
+            report_dir.mkdir(parents=True, exist_ok=True)
+            report_path = report_dir / f"report_{datetime.now().strftime('%Y%m%d_%H%M%S')}.md"
+            report_path.write_text(report_content, encoding="utf-8")
+
+            self.after(0, self.progress_bar.set, 1)
+            self.log_to_ui(f"报告生成完成: {report_path}", "SUCCESS")
+            return str(report_path)
+        except Exception as e:
+            logger.error(f"报告生成失败: {e}", exc_info=True)
+            self.log_to_ui(f"报告生成失败: {e}", "ERROR")
+            return ""
 
     def update_time(self):
         self.time_label.configure(text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
