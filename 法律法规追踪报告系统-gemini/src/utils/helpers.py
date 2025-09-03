@@ -10,7 +10,7 @@ import os
 import zipfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, Tuple
-from datetime import datetime, timedelta
+from datetime import datetime
 import pandas as pd
 import pendulum
 from urllib.parse import urlparse, urljoin, quote, unquote
@@ -122,19 +122,19 @@ class DateUtils:
     
     @staticmethod
     def parse_chinese_date(date_str: str) -> Optional[datetime]:
-        """解析中文日期格式"""
+        """解析中文日期格式并返回 ``datetime`` 对象"""
         if not date_str:
             return None
-        
+
         try:
             # 标准化日期格式
             date_str = re.sub(r'[年月日]', '-', date_str)
             date_str = re.sub(r'-$', '', date_str)  # 移除末尾的-
             date_str = re.sub(r'--+', '-', date_str)  # 合并多个-
-            
-            # 尝试解析
-            return pendulum.parse(date_str, strict=False).to_date_string()
-        except:
+
+            # 尝试解析为 datetime
+            return pendulum.parse(date_str, strict=False).naive()
+        except Exception:
             return None
     
     @staticmethod
@@ -150,11 +150,11 @@ class DateUtils:
     
     @staticmethod
     def get_date_range(days: int = 7) -> Tuple[datetime, datetime]:
-        """获取指定天数的日期范围"""
+        """获取指定天数的日期范围，返回 ``datetime`` 对象"""
         end_date = pendulum.now()
         start_date = end_date.subtract(days=days)
-        
-        return start_date.to_date_string(), end_date.to_date_string()
+
+        return start_date.naive(), end_date.naive()
     
     @staticmethod
     def is_recent(date: datetime, days: int = 30) -> bool:
