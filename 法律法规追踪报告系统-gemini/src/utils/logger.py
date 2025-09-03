@@ -1,26 +1,20 @@
-"""
-智能法律法规追踪系统 - 日志工具模块
-使用loguru提供高性能日志记录功能
-"""
+"""Loguru-based logging utilities for the regulation tracking system."""
 
 import sys
-import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Dict, Any
+
 from loguru import logger
 from rich.console import Console
-from rich.logging import RichHandler
 import pendulum
 
-from ..config.settings import get_settings
-from ..config.constants import LOG_LEVELS
+from ..config.settings import settings
 
 
 class LoggerManager:
     """日志管理器"""
     
     def __init__(self):
-        self.settings = get_settings()
         self.console = Console()
         self._configured = False
         
@@ -32,35 +26,38 @@ class LoggerManager:
         # 移除默认处理器
         logger.remove()
         
+        # 获取日志级别和文件路径
+        log_level = getattr(settings, "log_level", "INFO")
+        log_file_path = Path(getattr(settings, "log_file_path", "logs/app.log"))
+
         # 确保日志目录存在
-        log_dir = Path(self.settings.logging.file_path).parent
+        log_dir = log_file_path.parent
         log_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # 配置控制台输出
-        if self.settings.logging.console_output:
-            logger.add(
-                sys.stderr,
-                level=self.settings.logging.level,
-                format=self._get_console_format(),
-                colorize=True,
-                backtrace=True,
-                diagnose=True,
-                enqueue=True
-            )
-        
+        logger.add(
+            sys.stderr,
+            level=log_level,
+            format=self._get_console_format(),
+            colorize=True,
+            backtrace=True,
+            diagnose=True,
+            enqueue=True,
+        )
+
         # 配置文件输出
         logger.add(
-            self.settings.logging.file_path,
-            level=self.settings.logging.level,
+            str(log_file_path),
+            level=log_level,
             format=self._get_file_format(),
-            rotation=self.settings.logging.max_file_size,
-            retention=self.settings.logging.backup_count,
+            rotation="10 MB",
+            retention=10,
             compression="zip",
             enqueue=True,
             backtrace=True,
-            diagnose=True
+            diagnose=True,
         )
-        
+
         # 配置错误日志单独文件
         error_log_path = log_dir / "errors.log"
         logger.add(
@@ -72,9 +69,9 @@ class LoggerManager:
             compression="zip",
             enqueue=True,
             backtrace=True,
-            diagnose=True
+            diagnose=True,
         )
-        
+
         # 配置性能日志
         performance_log_path = log_dir / "performance.log"
         logger.add(
@@ -84,11 +81,11 @@ class LoggerManager:
             rotation="5 MB",
             retention=5,
             filter=lambda record: "PERFORMANCE" in record["extra"],
-            enqueue=True
+            enqueue=True,
         )
-        
+
         self._configured = True
-        logger.info(f"日志系统初始化完成 - 级别: {self.settings.logging.level}")
+        logger.info(f"日志系统初始化完成 - 级别: {log_level}")
     
     def _get_console_format(self) -> str:
         """获取控制台日志格式"""
