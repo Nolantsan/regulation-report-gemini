@@ -120,11 +120,13 @@ class EnhancedAIService:
             if analysis.get('impact_level') == 'high':
                 high_impact_count += 1
 
-            regulations_detail.append(
-                f"- 【{reg['title']}】\n"
-                f"  - 影响等级：{analysis.get('impact_level', '未知')}\n"
-                f"  - 核心要点：{analysis.get('summary', '待分析')}\n"
-            )
+            regulations_detail.extend([
+                "".join([
+                    f"- 【{reg['title']}】",
+                    f"\n  - 影响等级：{analysis.get('impact_level', '未知')}",
+                    f"\n  - 核心要点：{analysis.get('summary', '待分析')}",
+                ])
+            ])
 
         return {
             'categories': ', '.join(categories) or '无',
