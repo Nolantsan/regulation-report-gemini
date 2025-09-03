@@ -13,26 +13,29 @@ from src.ui.app import LegalTrackerApp
 from src.database.connection import init_db
 from src.config.settings import settings
 
+
 def setup_logger():
     """配置Loguru日志记录器，提供控制台和文件两种输出"""
     logger.remove()  # 移除默认的处理器以进行自定义
+    if settings.logging.console_output:
+        logger.add(
+            sys.stderr,
+            level=settings.logging.level,
+            format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}:{function}:{line}</cyan> - <level>{message}</level>",
+        )
+    # 将日志文件保存在项目根目录的指定位置
     logger.add(
-        sys.stderr,
-        level=settings.log_level,
-        format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}:{function}:{line}</cyan> - <level>{message}</level>"
-    )
-    # 将日志文件保存在项目根目录的'logs'文件夹下
-    logger.add(
-        project_root / "logs" / "app_{time}.log",
-        rotation="1 week",
-        retention="1 month",
-        level="DEBUG",
+        project_root / settings.logging.file_path,
+        rotation=settings.logging.rotation,
+        retention=settings.logging.retention,
+        level=settings.logging.level,
         encoding="utf-8",
-        enqueue=True, # 使日志写入异步，防止阻塞
+        enqueue=True,  # 使日志写入异步，防止阻塞
         backtrace=True,
-        diagnose=True
+        diagnose=True,
     )
     logger.info("日志系统配置完成。")
+
 
 def main():
     """应用主入口函数，负责初始化和启动"""
@@ -51,6 +54,7 @@ def main():
     app = LegalTrackerApp()
     app.mainloop()
     logger.info("应用已关闭。")
+
 
 if __name__ == "__main__":
     main()
