@@ -3,7 +3,7 @@
 定义系统中使用的所有常量
 """
 
-from enum import Enum
+from enum import Enum, IntEnum
 from typing import Dict, List
 
 
@@ -200,15 +200,19 @@ SUPPORTED_FILE_TYPES = {
 
 
 # ================== 日志等级映射 ==================
-LOG_LEVELS = {
-    "TRACE": 5,
-    "DEBUG": 10,
-    "INFO": 20,
-    "SUCCESS": 25,
-    "WARNING": 30,
-    "ERROR": 40,
-    "CRITICAL": 50
-}
+class LogLevel(IntEnum):
+    """Loguru supported log levels"""
+
+    TRACE = 5
+    DEBUG = 10
+    INFO = 20
+    SUCCESS = 25
+    WARNING = 30
+    ERROR = 40
+    CRITICAL = 50
+
+
+LOG_LEVELS: Dict[str, int] = {level.name: level.value for level in LogLevel}
 
 
 # ================== 邮件模板 ==================
@@ -248,13 +252,13 @@ API_LIMITS = {
 
 
 # ================== 正则表达式模式 ==================
-REGEX_PATTERNS = {
-    "date": r'\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?',
-    "regulation_number": r'[A-Za-z0-9]{1,10}〔\d{4}〕第?\d{1,4}号?',
-    "phone": r'1[3-9]\d{9}',
-    "email": r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
-    "url": r'https?://[^\s<>"{}|\\^`\[\]]+',
-    "chinese_text": r'[\u4e00-\u9fff]+'
+REGEX_PATTERNS: Dict[str, str] = {
+    "chinese_text": r"[\u4e00-\u9fff]+",
+    "date": r"\d{4}[-/年]\d{1,2}[-/月]\d{1,2}[日]?",
+    "regulation_number": r"[A-Za-z0-9]{1,10}〔\d{4}〕第?\d{1,4}号?",
+    "phone": r"1[3-9]\d{9}",
+    "email": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
+    "url": r"https?://[^\s<>\"{}|\\^`\[\]]+",
 }
 
 
