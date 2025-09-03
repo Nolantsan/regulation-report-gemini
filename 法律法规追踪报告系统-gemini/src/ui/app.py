@@ -11,7 +11,7 @@ from loguru import logger
 # 导入核心服务和数据库模块
 from src.core.scraper import AsyncLegalScraper
 from src.core.ai_service import ai_service
-from src.database.connection import get_db # 使用get_db
+from src.database.connection import SessionLocal
 from src.database.models import Regulation
 from sqlalchemy import desc
 
@@ -119,14 +119,46 @@ class LegalTrackerApp(ctk.CTk):
             self.after(0, self._set_ui_idle)
 
     async def run_web_search_async(self) -> list:
-        # ... implementation is correct ...
-        return []
+        if not self.web_search_switch.get():
+            self.log_to_ui("网络搜索已禁用", "WARNING")
+            return []
+        self.log_to_ui("开始网络搜索...", "INFO")
+        try:
+            async with AsyncLegalScraper() as scraper:
+                results = await scraper.fetch_all_sources()
+            self.log_to_ui(f"网络搜索完成，共获取{len(results)}条数据", "SUCCESS")
+            return results
+        except Exception as e:
+            logger.error(f"网络搜索失败: {e}", exc_info=True)
+            self.log_to_ui(f"网络搜索失败: {e}", "ERROR")
+            return []
 
     async def run_scan_async(self):
-        # ... implementation is correct ...
-        with next(get_db()) as db_session:
-            # ... database logic ...
-            pass
+        regulations = await self.run_web_search_async()
+        if not regulations:
+            self.log_to_ui("未获取到任何法规数据", "WARNING")
+            return
+
+        analyzed = await ai_service.batch_analyze(regulations)
+        with SessionLocal() as db_session:
+            for reg in analyzed:
+                exists = db_session.query(Regulation).filter_by(url=reg['url']).first()
+                if exists:
+                    continue
+                db_entry = Regulation(
+                    title=reg.get('title'),
+                    url=reg.get('url'),
+                    publish_date=reg.get('publish_date'),
+                    source=reg.get('source'),
+                    category=reg.get('category'),
+                    full_text=reg.get('full_text'),
+                    keywords=reg.get('keywords'),
+                    ai_analysis=reg.get('ai_analysis'),
+                )
+                db_session.add(db_entry)
+            db_session.commit()
+
+        self.log_to_ui(f"扫描完成，新增{len(analyzed)}条法规", "SUCCESS")
 
     def start_report_generation_thread(self):
         self.log_to_ui("请求生成合规报告...", "INFO")
@@ -148,10 +180,30 @@ class LegalTrackerApp(ctk.CTk):
             self.after(0, self._set_ui_idle)
 
     async def run_report_generation_async(self):
-        # ... implementation is correct ...
-        with next(get_db()) as db_session:
-            # ... database logic ...
-            pass
+        self.log_to_ui("开始生成合规报告...", "INFO")
+        with SessionLocal() as db_session:
+            regs = (
+                db_session.query(Regulation)
+                .order_by(desc(Regulation.publish_date))
+                .limit(20)
+                .all()
+            )
+            regs_data = [
+                {
+                    "title": r.title,
+                    "publish_date": r.publish_date.isoformat() if r.publish_date else "",
+                    "source": r.source,
+                    "category": r.category,
+                    "ai_analysis": r.ai_analysis,
+                }
+                for r in regs
+                if r.ai_analysis
+            ]
+
+        report = await ai_service.generate_executive_report(regs_data)
+        report_path = Path("executive_report.md")
+        report_path.write_text(report, encoding="utf-8")
+        self.log_to_ui(f"报告生成完成: {report_path}", "SUCCESS")
 
     def update_time(self):
         self.time_label.configure(text=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
