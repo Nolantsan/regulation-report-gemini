@@ -28,30 +28,33 @@ class LoggerManager:
         """设置日志配置"""
         if self._configured:
             return
-            
+
         # 移除默认处理器
         logger.remove()
-        
+
         # 确保日志目录存在
         log_dir = Path(self.settings.logging.file_path).parent
         log_dir.mkdir(parents=True, exist_ok=True)
-        
+
+        level_name = str(self.settings.logging.level).upper()
+        log_level = LOG_LEVELS.get(level_name, LOG_LEVELS["INFO"])
+
         # 配置控制台输出
         if self.settings.logging.console_output:
             logger.add(
                 sys.stderr,
-                level=self.settings.logging.level,
+                level=log_level,
                 format=self._get_console_format(),
                 colorize=True,
                 backtrace=True,
                 diagnose=True,
                 enqueue=True
             )
-        
+
         # 配置文件输出
         logger.add(
             self.settings.logging.file_path,
-            level=self.settings.logging.level,
+            level=log_level,
             format=self._get_file_format(),
             rotation=self.settings.logging.max_file_size,
             retention=self.settings.logging.backup_count,
@@ -88,7 +91,7 @@ class LoggerManager:
         )
         
         self._configured = True
-        logger.info(f"日志系统初始化完成 - 级别: {self.settings.logging.level}")
+        logger.info(f"日志系统初始化完成 - 级别: {level_name}")
     
     def _get_console_format(self) -> str:
         """获取控制台日志格式"""
